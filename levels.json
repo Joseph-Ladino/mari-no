@@ -1,0 +1,12 @@
+[
+    {
+        "width": 3392,
+        "height": 224,
+        "tilesize": 16,
+        "cols": 212,
+        "rows": 14,
+        "tiles": [],
+        "entities": [],
+        "src": "./maps/bg-1-1.png"
+    }
+]
