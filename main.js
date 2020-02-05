@@ -1,20 +1,49 @@
 //--------------Classes & Objects--------------//
+class Frame {
+    constructor(img, startX, startY, sizeX, sizeY, frameLength = 3, mirrored = false) {
+        this.img = img;
+        this.startX = startX;
+        this.startY = startY;
+        this.sizeX = sizeX;
+        this.sizeY = sizeY;
+        this.delay = frameLength;
+        this.mirrored = mirrored;
+    }
+}
+
 class Player {
     constructor(x, y, size, minsize = 20) {
         this.accX = 1.5; this.accY = 1.5; this.accZ = 4;
         this.velX = 0; this.velY = 0; this.velZ = 0;
         this.dirX = 0; this.dirY = 0; this.dirZ = 0;
+        this.facing = 1;
         this.oldX = x; this.oldY = y;
         this.x = x;
         this.y = y;
         this.size = size;
         this.minSize = minsize;
         this.alive = true;
+        this.handledDeath = false;
+        this.state = "standing"; this.oldState = "standing";
+        this.activeFrame = document.createElement("img"); this.activeFrame.classList += "fitContent ";
+        this.frameIndex = 0;
+        this.frameCounter = 0;
+        this.frames = {
+            standingRight: [new Frame("./sprites/mario strip.png", 80, 34, 16, 16, 3, false)],
+            standingLeft: [new Frame("./sprites/mario strip.png", 80, 34, 16, 16, 3, true)],
+            jumpingRight: [new Frame("./sprites/mario strip.png", 165, 34, 16, 16, 3, false)],
+            jumpingLeft: [new Frame("./sprites/mario strip.png", 165, 34, 16, 16, 3, true)],
+            walkingRight: [new Frame("./sprites/mario strip.png", 97, 34, 16, 16, 3, false), new Frame("./sprites/mario strip.png", 114, 34, 16, 16, 3, false), new Frame("./sprites/mario strip.png", 131, 34, 16, 16, 3, false)],
+            walkingLeft: [new Frame("./sprites/mario strip.png", 97, 34, 16, 16, 3, true), new Frame("./sprites/mario strip.png", 114, 34, 16, 16, 3, true), new Frame("./sprites/mario strip.png", 131, 34, 16, 16, 3, true)],
+            deadRight: [new Frame("./sprites/mario strip.png", 182, 34, 16, 16, 3, false)],
+            deadLeft: [new Frame("./sprites/mario strip.png", 182, 34, 16, 16, 3, false)],
+        };
     }
 
     frame(_delta) {
         this.oldX = this.x;
         this.oldY = this.y;
+        this.oldState = this.state;
 
         this.velZ -= world.gravity;
         if(this.size + this.velZ <= this.minSize && this.alive) {
@@ -45,21 +74,49 @@ class Player {
         this.dirX = Math.sign(this.velX);
         this.dirY = Math.sign(this.velY);
         this.dirZ = Math.sign(this.velZ);
+        this.facing = (this.x - this.oldX > 0) ? 1 : ((this.x - this.oldX < 0) ? -1 : this.facing);
+
+        if(!this.alive) this.state = "dead";
+        else if(this.dirX == 0 && this.dirY == 0 && this.dirZ == 0) this.state = "standing";
+        else if(this.dirZ != 0) this.state = "jumping";
+        else if(this.dirX != 0 || this.dirY != 0) this.state = "walking";
+
+        this.state += (this.facing == 1) ? "Right" : "Left";
     }
 
     reset() {
+        this.alive = true;
+        this.handledDeath = false;
         this.velX = 0;
         this.velY = 0;
         this.velZ = 0;
         this.oldX = 0;
         this.oldY = 0;
-        this.x = world.tilesize * 1.5;
-        this.y = world.tilesize * world.rows - (this.size / 2);
+        this.x = (world.tilesize * 1.5) - world.offsetX;
+        this.y = world.tilesize * (world.rows - 2) - (this.size / 2);
         options.renderOffsetX = 0;
+        playSound("./sounds/smb_overworld.wav");
     }
 
     draw() {
-        buffer.fillRect(this.x - (this.size / 2), this.y - (this.size / 2), this.size, this.size);
+
+        if(this.state == this.oldState && this.frameCounter % this.frames[this.state][this.frameIndex].delay == 0) this.frameIndex++;
+        if(this.frameIndex >= this.frames[this.state].length || this.state != this.oldState) this.frameIndex = 0;
+
+        var cur = this.frames[this.state][this.frameIndex];
+
+        this.activeFrame.src = cur.img;
+        if(!cur.mirrored) buffer.drawImage(this.activeFrame, cur.startX, cur.startY, cur.sizeX, cur.sizeY, this.x - (this.size / 2), this.y - (this.size / 2), this.size, this.size);
+        else {
+            buffer.save();
+            buffer.translate(this.x + (this.size / 2), this.y - (this.size / 2));
+            buffer.scale(-1, 1);
+            buffer.drawImage(this.activeFrame, cur.startX, cur.startY, cur.sizeX, cur.sizeY, 0, 0, this.size, this.size);
+            buffer.restore();
+        }
+
+        if(this.state == this.oldState) this.frameCounter++;
+        else this.frameCounter = 0;
     }
 }
 
@@ -69,6 +126,8 @@ class Level {
             this.width    = widthORobject.width;
             this.height   = widthORobject.height;
             this.tilesize = widthORobject.tilesize;
+            this.offsetX  = widthORobject.offsetX;
+            this.offsetY  = widthORobject.offsetY;
             this.cols     = widthORobject.cols;
             this.rows     = widthORobject.rows;
             this.tiles    = widthORobject.tiles;
@@ -78,6 +137,8 @@ class Level {
             this.width    = widthORobject;
             this.height   = height;
             this.tilesize = tilesize;
+            this.offsetX  = 0;
+            this.offsetY  = 0;
             this.cols     = widthORobject / tilesize;
             this.rows     = height / tilesize;
             this.tiles    = tiles;
@@ -105,9 +166,11 @@ var world = {
     background: document.createElement("img"),
     state: 0,
     friction: 0.75,
-    gravity: 0.3,
-    roundThreshold: 0.01,
+    gravity: 0.4,
+    roundThreshold: 0.5,
+    sounds: [],
     keys: {},
+    loaded: false,
 };
 
 var options = {
@@ -125,6 +188,7 @@ var options = {
     renderOffsetY: 0,
     screenSizeX: 16*20,
     screenSizeY: 16*14,
+    outlineTiles: false,
 };
 
 //--------------Global Vars--------------//
@@ -148,10 +212,25 @@ function render() {
     world.background.height = world.height;
 
     buffer.drawImage(world.background, 0, 0, world.width, world.height);
+
+    if(options.outlineTiles) {
+        for(var y = 0; y < world.rows; y++) {
+            for(var x = 0; x < world.cols; x++) {
+                buffer.beginPath();
+                buffer.moveTo((x * world.tilesize) + world.offsetX, (y * world.tilesize) + world.offsetY);
+                buffer.lineTo((x * world.tilesize) + world.tilesize + world.offsetX, (y * world.tilesize) + world.offsetY);
+                buffer.lineTo((x * world.tilesize) + world.tilesize + world.offsetX, (y * world.tilesize) + world.tilesize + world.offsetY);
+                buffer.lineWidth = 1;
+                buffer.stroke();
+            }
+        }
+    }
+
     for(var i = 0, ent; i < world.entities.length; i++) {
         ent = world.entities[i];
         ent.draw();
     }
+
     ctx.drawImage(buffer.canvas, options.renderOffsetX, options.renderOffsetY, options.screenSizeX, options.screenSizeY, 0, 0, ctx.canvas.width, ctx.canvas.height);
 }
 
@@ -163,6 +242,8 @@ function loadLevel(level) {
     world.width = level.width;
     world.height = level.height;
     world.tilesize = level.tilesize;
+    world.offsetX = level.offsetX;
+    world.offsetY = level.offsetY;
     world.cols = level.cols;
     world.rows = level.rows;
     world.tiles = level.tiles;
@@ -182,25 +263,33 @@ function grabLevelsFromFile(filePath) {
 }
 
 function gameFrame(delta) {
-    bindState(options.keys.up, "down", (_key)=>{p.velY -= p.accY});
-    bindState(options.keys.down, "down", (_key)=>{p.velY += p.accY});
-    bindState(options.keys.left, "down", (_key)=>{p.velX -= p.accX});
-    bindState(options.keys.right, "down", (_key)=>{p.velX += p.accX});
-    bindState(options.keys.jump, "firstDown", (_key)=>{if(p.dirZ == 0) p.velZ += p.accZ});
+    bindState(options.keys.up, "down", (_key)=>{if(p.alive) p.velY -= p.accY});
+    bindState(options.keys.down, "down", (_key)=>{if(p.alive) p.velY += p.accY});
+    bindState(options.keys.left, "down", (_key)=>{if(p.alive) p.velX -= p.accX});
+    bindState(options.keys.right, "down", (_key)=>{if(p.alive) p.velX += p.accX});
+    bindState(options.keys.jump, "firstDown", (_key)=>{if(p.dirZ == 0 && p.alive) p.velZ += p.accZ});
+
+    if(!p.alive && !p.handledDeath) {
+        for(var j = 0; j < world.sounds.length; j++) {
+            removeSound(j);
+        }
+        playSound("./sounds/smb_mariodie.wav", ()=>{p.reset()});
+        p.handledDeath = true;
+    }
 
     for(var i = 0, ent; i < world.entities.length; i++) {
         ent = world.entities[i];
         ent.frame(delta);
     }
 
-    options.screenSizeY = world.tilesize * world.rows;
+    options.screenSizeY = world.height;
     options.screenSizeX = world.tilesize * 20;
 
     var halfScreenWidth = (options.screenSizeX / 2);
     if(p.x < halfScreenWidth && options.renderOffsetX == 0) options.renderOffsetX = 0;
     else if(p.x + halfScreenWidth > world.width) options.renderOffsetX = world.width - options.screenSizeX;
     else if(p.x - halfScreenWidth > options.renderOffsetX) options.renderOffsetX = p.x - halfScreenWidth;
-
+    collide(p);
 }
 
 function loop(e) {
@@ -208,7 +297,7 @@ function loop(e) {
 
     switch(world.state) {
 
-        // menu screens
+        // main menu screen/discret loading
         case 0:
 
             menus[menuIndex].style.display = "flex";
@@ -218,7 +307,8 @@ function loop(e) {
                 }
             }
 
-            grabLevelsFromFile("./levels.json");
+            if(!world.loaded) grabLevelsFromFile("./levels.json");
+            world.loaded = true;
             break;
 
         // load level/init
@@ -228,12 +318,14 @@ function loop(e) {
 
             buffer.canvas.width = world.width;
             buffer.canvas.height = world.height;
-            p = new Player(24, 200, world.tilesize, world.tilesize);
+            p = new Player(24, 208, world.tilesize, world.tilesize);
             world.entities.push(p);
 
             resizeCanvas();
 
             world.state = 2;
+            world.loaded = false;
+            playSound("./sounds/smb_overworld.wav");
 
             break;
 
@@ -295,14 +387,14 @@ function handleKeyboardEvents(e) {
     }
 }
 
-function tileID(x, y) {
-    return Math.floor(y / world.tilesize) * world.cols + Math.floor(x / world.tilesize);
+function toTileID(x, y) {
+    return Math.floor((y - world.offsetY) / world.tilesize) * world.cols + Math.floor((x - world.offsetX) / world.tilesize);
 }
 
 function fromTileID(tileID) {
     var x = tileID % world.cols;
     var y = (tileID - x) / world.cols;
-    return [x * world.tilesize, y * world.tilesize];
+    return [(x * world.tilesize) + world.offsetX, (y * world.tilesize) + world.offsetY];
 }
 
 function collide(entity) {
@@ -311,7 +403,7 @@ function collide(entity) {
         top    = entity.y - (entity.size / 2),
         left   = entity.x - (entity.size / 2);
 
-    var tileID, fromTileID, tilebottom, tileright, tiletop, tileleft;
+    var tileID, xy, tilebottom, tileright, tiletop, tileleft, platformCollision = false;
 
     var pairs = [
             [left,     top],
@@ -320,20 +412,43 @@ function collide(entity) {
             [right,    top],
         ];
 
-        for(var i = 0; i < 4; i++) {
-            tileID = world.tiles[tileID(pairs[i][0], pairs[i][1])]
-            fromTileID = fromTileID(tileID);
-            tilebottom = fromTileID[1] + world.tilesize;
-            tileright  = fromTileID[0] + world.tilesize;
-            tiletop    = fromTileID[1];
-            tileleft   = fromTileID[0];
+    for(var i = 0; i < 4; i++) {
+        tileID     = toTileID(pairs[i][0], pairs[i][1]);
+        xy         = fromTileID(tileID);
+        tilebottom = xy[1] + world.tilesize;
+        tileright  = xy[0] + world.tilesize;
+        tiletop    = xy[1];
+        tileleft   = xy[0];
 
-            switch(tileID) {
-                case 1:
-
-                    break;
-            }
+        switch(world.tiles[tileID] - 1) {
+            case 0:
+                if(!platformCollision && entity.size <= entity.minSize) p.alive = false;
+                break;
+            case 1:
+            case 2:
+            case 3:
+            case 4:
+            case 5:
+                platformCollision = true;
+                p.alive = true;
+                break;
         }
+    }
+}
+
+function removeSound(index) {
+    world.sounds[index].pause();
+    world.sounds.splice(index, 1);
+}
+
+function playSound(url, cb = false) {
+    var sound = document.createElement("audio"), index;
+    sound.src = url;
+    world.sounds.push(sound);
+    index = world.sounds.length - 1;
+    sound.play();
+    if(cb) sound.addEventListener("ended", cb);
+    sound.addEventListener("ended", ()=>{removeSound(index)});
 }
 
 function startGame() {
