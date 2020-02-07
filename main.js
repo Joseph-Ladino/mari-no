@@ -11,8 +11,46 @@ class Frame {
     }
 }
 
-class Player {
-    constructor(x, y, size, minsize = 20) {
+class Sound {
+    constructor(url, cb = false) {
+        this.playable = false;
+        this.playing = false;
+        this.elm = new Audio(url);
+        this.elm.addEventListener("canplay", ()=>{this.playable = true});
+        if(cb) this.elm.onended = cb;
+    }
+
+    set cb(cb) {
+        this.elm.onended = cb;
+    }
+
+    get cb() {
+        return this.elm.onended;
+    }
+
+    play() {
+        this.elm.play();
+        this.playing = true;
+    }
+
+    pause() {
+        this.elm.pause();
+        this.playing = false;
+    }
+
+    reset() {
+        if(this.playing) this.pause();
+        this.elm.currentTime = 0;
+    }
+
+    restart() {
+        this.reset();
+        this.play();
+    }
+}
+
+class Entity {
+    constructor(x, y, size, minsize = 16) {
         this.accX = 1.5; this.accY = 1.5; this.accZ = 4;
         this.velX = 0; this.velY = 0; this.velZ = 0;
         this.dirX = 0; this.dirY = 0; this.dirZ = 0;
@@ -23,11 +61,71 @@ class Player {
         this.size = size;
         this.minSize = minsize;
         this.alive = true;
+        this.noclip = false;
         this.handledDeath = false;
-        this.state = "standing"; this.oldState = "standing";
+        this.controllable = false;
+        this.state = ""; this.oldState = "";
         this.activeFrame = document.createElement("img"); this.activeFrame.classList += "fitContent ";
         this.frameIndex = 0;
         this.frameCounter = 0;
+        this.frames = {};
+    }
+
+    frame() {
+
+    }
+
+    reset() {
+
+    }
+
+    get leftSide() {
+        return this.x - (this.size / 2);
+    }
+
+    get rightSide() {
+        return this.x + (this.size / 2);
+    }
+
+    get topSide() {
+        return this.y - (this.size / 2);
+    }
+
+    get bottomSide() {
+        return this.y + (this.size / 2);
+    }
+
+    set leftSide(val) {
+        this.x = val + (this.size / 2);
+    }
+
+    set rightSide(val) {
+        this.x = val - (this.size / 2);
+    }
+
+    set topSide(val) {
+        this.y = val + (this.size / 2);
+    }
+
+    set bottomSide(val) {
+        this.y = val - (this.size / 2);
+    }
+
+    delete() {
+        for(var val in this) {
+            if(val != "delete") delete this[val];
+        }
+        world.entities.splice(world.entities.indexOf(this), 1);
+    }
+}
+
+class Player extends Entity {
+    constructor(x, y, size, minsize = 16) {
+        super(x, y, size, minsize);
+        this.state = "standingRight"; this.oldState = "standingRight"
+        this.flagPole = false;
+        this.won = false;
+        this.controllable = true;
         this.frames = {
             standingRight: [new Frame("./sprites/mario strip.png", 80, 34, 16, 16, 3, false)],
             standingLeft: [new Frame("./sprites/mario strip.png", 80, 34, 16, 16, 3, true)],
@@ -37,6 +135,8 @@ class Player {
             walkingLeft: [new Frame("./sprites/mario strip.png", 97, 34, 16, 16, 3, true), new Frame("./sprites/mario strip.png", 114, 34, 16, 16, 3, true), new Frame("./sprites/mario strip.png", 131, 34, 16, 16, 3, true)],
             deadRight: [new Frame("./sprites/mario strip.png", 182, 34, 16, 16, 3, false)],
             deadLeft: [new Frame("./sprites/mario strip.png", 182, 34, 16, 16, 3, false)],
+            flagPoleRight: [new Frame("./sprites/mario strip.png", 216, 34, 16, 16, 3, false)],
+            flagPoleLeft: [new Frame("./sprites/mario strip.png", 216, 34, 16, 16, 3, true)],
         };
     }
 
@@ -57,19 +157,32 @@ class Player {
         this.velX *= world.friction;
         this.velY *= world.friction;
 
-        if(Math.abs(this.velX) >= world.tilesize) this.velX = (Math.sign(this.velX) * world.tilesize);
+        if(Math.abs(this.velX) >= world.tilesize) this.velX = (Math.sign(this.velX) * world.tilesize) - (Math.sign(this.velX));
         else if(Math.abs(this.velX) < world.roundThreshold) this.velX = 0;
         if(Math.abs(this.velY) >= world.tilesize) this.velY = (Math.sign(this.velY) * world.tilesize) - (Math.sign(this.velY));
         else if(Math.abs(this.velY) < world.roundThreshold) this.velY = 0;
 
         this.x += this.velX;
         this.y += this.velY;
+        this.size += this.velZ;
 
         this.x = Math.round(this.x);
         this.y = Math.round(this.y);
 
-        if(this.x - (this.size / 2) < options.renderOffsetX) this.x = options.renderOffsetX + (this.size / 2);
-        this.size += this.velZ;
+        if(this.leftSide < options.renderOffsetX) {
+            this.leftSide = options.renderOffsetX;
+            this.velX = 0;
+        } else if(this.rightSide > options.renderOffsetX + options.screenSizeX) {
+            this.rightSide = options.renderOffsetX + options.screenSizeX;
+            this.velX = 0;
+        }
+        if(this.topSide < options.renderOffsetY) {
+            this.topSide = options.renderOffsetY;
+            this.velY = 0;
+        } else if(this.bottomSide > options.renderOffsetY + options.screenSizeY) {
+            this.bottomSide = options.renderOffsetY + options.screenSizeY;
+            this.velY = 0;
+        }
 
         this.dirX = Math.sign(this.velX);
         this.dirY = Math.sign(this.velY);
@@ -77,11 +190,44 @@ class Player {
         this.facing = (this.x - this.oldX > 0) ? 1 : ((this.x - this.oldX < 0) ? -1 : this.facing);
 
         if(!this.alive) this.state = "dead";
+        else if(this.flagPole) {this.state = "flagPole"; this.win()}
         else if(this.dirX == 0 && this.dirY == 0 && this.dirZ == 0) this.state = "standing";
         else if(this.dirZ != 0) this.state = "jumping";
         else if(this.dirX != 0 || this.dirY != 0) this.state = "walking";
 
         this.state += (this.facing == 1) ? "Right" : "Left";
+    }
+
+    win() {
+        // 100 - ((y-top) / (top + (height)))
+        var flagPoleTop, flagPoleBottom, flagPoleHeight, xTile = Math.floor(this.x / world.tilesize), yTile = Math.floor(this.y / world.tilesize);
+        for(var i = yTile; i > 0; i--) {
+            if(world.tiles[(i * world.cols) + xTile] - 1 != 5 && i != yTile) {
+                flagPoleTop = i + 1;
+                break;
+            }
+        }
+
+        for(var j = yTile; j < world.rows; j++) {
+            var tile = (j * world.cols) + xTile;
+            if(world.tiles[tile] - 1 != 5) {
+                flagPoleBottom = (fromTileID(tile)[1] + world.offsetY) / world.tilesize;
+                break;
+            }
+        }
+
+        flagPoleHeight = flagPoleBottom - flagPoleTop;
+
+        if(yTile < flagPoleBottom) this.y += world.gravity * 2;
+
+        if(!this.won) {
+            var score = ((flagPoleHeight - (yTile - flagPoleTop)) / flagPoleHeight) * 1000;
+            score -= score % 100;
+            world.score += score;
+            pauseSound(world.sounds.loop);
+            playSound(world.sounds.win);
+            this.won = true;
+        }
     }
 
     reset() {
@@ -93,57 +239,15 @@ class Player {
         this.oldX = 0;
         this.oldY = 0;
         this.x = (world.tilesize * 1.5) - world.offsetX;
-        this.y = world.tilesize * (world.rows - 2) - (this.size / 2);
+        this.bottomSide = world.tilesize * (world.rows - 2);
         options.renderOffsetX = 0;
-        playSound("./sounds/smb_overworld.wav");
-    }
-
-    draw() {
-
-        if(this.state == this.oldState && this.frameCounter % this.frames[this.state][this.frameIndex].delay == 0) this.frameIndex++;
-        if(this.frameIndex >= this.frames[this.state].length || this.state != this.oldState) this.frameIndex = 0;
-
-        var cur = this.frames[this.state][this.frameIndex];
-
-        this.activeFrame.src = cur.img;
-        if(!cur.mirrored) buffer.drawImage(this.activeFrame, cur.startX, cur.startY, cur.sizeX, cur.sizeY, this.x - (this.size / 2), this.y - (this.size / 2), this.size, this.size);
-        else {
-            buffer.save();
-            buffer.translate(this.x + (this.size / 2), this.y - (this.size / 2));
-            buffer.scale(-1, 1);
-            buffer.drawImage(this.activeFrame, cur.startX, cur.startY, cur.sizeX, cur.sizeY, 0, 0, this.size, this.size);
-            buffer.restore();
-        }
-
-        if(this.state == this.oldState) this.frameCounter++;
-        else this.frameCounter = 0;
     }
 }
 
 class Level {
-    constructor(widthORobject, height = 900, tilesize = 25, tiles = [], entities = []) {
-        if(typeof(widthORobject) == "object") {
-            this.width    = widthORobject.width;
-            this.height   = widthORobject.height;
-            this.tilesize = widthORobject.tilesize;
-            this.offsetX  = widthORobject.offsetX;
-            this.offsetY  = widthORobject.offsetY;
-            this.cols     = widthORobject.cols;
-            this.rows     = widthORobject.rows;
-            this.tiles    = widthORobject.tiles;
-            this.entities = widthORobject.entities;
-            this.src      = widthORobject.src;
-        } else {
-            this.width    = widthORobject;
-            this.height   = height;
-            this.tilesize = tilesize;
-            this.offsetX  = 0;
-            this.offsetY  = 0;
-            this.cols     = widthORobject / tilesize;
-            this.rows     = height / tilesize;
-            this.tiles    = tiles;
-            this.entities = entities;
-            this.src      = "";
+    constructor(jsonObj) {
+        for(var prop in jsonObj) {
+            this[prop] = jsonObj[prop];
         }
     }
 }
@@ -155,7 +259,16 @@ class Key {
         this.down = false;
         this.up = true;
         this.timestamp = 0;
-        this.delay = 500;
+    }
+}
+
+class Button extends Key {
+    constructor(value) {
+        super();
+        this.down = (value > 0);
+        this.up = !this.down;
+        this.value = value;
+        this.minThreshold = 0.15;
     }
 }
 
@@ -165,12 +278,19 @@ var world = {
     levels: [],
     background: document.createElement("img"),
     state: 0,
+    score: 0,
     friction: 0.75,
     gravity: 0.4,
     roundThreshold: 0.5,
-    sounds: [],
     keys: {},
+    buttons: [],
+    axes: [],
     loaded: false,
+    sounds: {
+        die: new Sound("./sounds/smb_mariodie.wav", ()=>{world.state = 3}),
+        jump: new Sound("./sounds/smb_jump-small.wav"),
+        win: new Sound("./sounds/smb_stage_clear.wav", ()=>{world.state = 3}),
+    },
 };
 
 var options = {
@@ -181,14 +301,20 @@ var options = {
         down:  "s",
         right: "d",
     },
-    controller: {
-        useAnalog: true,
+    buttons: {
+        jump:    0,
+        up:     12,
+        left:   14,
+        down:   13,
+        right:  15,
     },
+    controller: {},
     renderOffsetX: 0,
     renderOffsetY: 0,
     screenSizeX: 16*20,
     screenSizeY: 16*14,
     outlineTiles: false,
+    usingController: false,
 };
 
 //--------------Global Vars--------------//
@@ -201,8 +327,27 @@ var ctx = document.getElementById("mycan").getContext("2d"),
     delta,
     old;
 
-
 //--------------Functions--------------//
+function entityAnimation(entity) {
+    if(entity.state == entity.oldState && entity.frameCounter % entity.frames[entity.state][entity.frameIndex].delay == 0) entity.frameIndex++;
+    if(entity.frameIndex >= entity.frames[entity.state].length || entity.state != entity.oldState) entity.frameIndex = 0;
+
+    var cur = entity.frames[entity.state][entity.frameIndex];
+
+    entity.activeFrame.src = cur.img;
+    if(!cur.mirrored) buffer.drawImage(entity.activeFrame, cur.startX, cur.startY, cur.sizeX, cur.sizeY, entity.leftSide, entity.topSide, entity.size, entity.size);
+    else {
+        buffer.save();
+        buffer.translate(entity.rightSide, entity.topSide);
+        buffer.scale(-1, 1);
+        buffer.drawImage(entity.activeFrame, cur.startX, cur.startY, cur.sizeX, cur.sizeY, 0, 0, entity.size, entity.size);
+        buffer.restore();
+    }
+
+    if(entity.state == entity.oldState) entity.frameCounter++;
+    else entity.frameCounter = 0;
+}
+
 function render() {
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     buffer.clearRect(0, 0, buffer.canvas.width, buffer.canvas.height);
@@ -226,28 +371,26 @@ function render() {
         }
     }
 
-    for(var i = 0, ent; i < world.entities.length; i++) {
-        ent = world.entities[i];
-        ent.draw();
+    for(var i = 0; i < world.entities.length; i++) {
+        entityAnimation(world.entities[i]);
     }
 
     ctx.drawImage(buffer.canvas, options.renderOffsetX, options.renderOffsetY, options.screenSizeX, options.screenSizeY, 0, 0, ctx.canvas.width, ctx.canvas.height);
 }
 
-function bindState(key, event, cb) {
+function bindKeyState(key, event, cb) {
     if(world.keys[key] && world.keys[key][event]) cb(world.keys[key]);
 }
 
+function bindButtonState(button, event, cb) {
+    if(world.buttons[button] && world.buttons[button][event]) cb(options.buttons[button]);
+}
+
 function loadLevel(level) {
-    world.width = level.width;
-    world.height = level.height;
-    world.tilesize = level.tilesize;
-    world.offsetX = level.offsetX;
-    world.offsetY = level.offsetY;
-    world.cols = level.cols;
-    world.rows = level.rows;
-    world.tiles = level.tiles;
-    world.entities = level.entities;
+    for(var prop in level) {
+        if(prop != "src" && prop != "music") world[prop] = level[prop];
+    }
+    world.sounds.loop = new Sound(level.music.loop);
 }
 
 function grabLevelsFromFile(filePath) {
@@ -263,18 +406,27 @@ function grabLevelsFromFile(filePath) {
 }
 
 function gameFrame(delta) {
-    bindState(options.keys.up, "down", (_key)=>{if(p.alive) p.velY -= p.accY});
-    bindState(options.keys.down, "down", (_key)=>{if(p.alive) p.velY += p.accY});
-    bindState(options.keys.left, "down", (_key)=>{if(p.alive) p.velX -= p.accX});
-    bindState(options.keys.right, "down", (_key)=>{if(p.alive) p.velX += p.accX});
-    bindState(options.keys.jump, "firstDown", (_key)=>{if(p.dirZ == 0 && p.alive) p.velZ += p.accZ});
+    if(!options.usingController) {
+        bindKeyState(options.keys.up, "down", (_key)=>{if(p.alive && p.controllable) p.velY -= p.accY});
+        bindKeyState(options.keys.down, "down", (_key)=>{if(p.alive && p.controllable) p.velY += p.accY});
+        bindKeyState(options.keys.left, "down", (_key)=>{if(p.alive && p.controllable) p.velX -= p.accX});
+        bindKeyState(options.keys.right, "down", (_key)=>{if(p.alive && p.controllable) p.velX += p.accX});
+        bindKeyState(options.keys.jump, "firstDown", (_key)=>{if(p.dirZ == 0 && p.alive && p.controllable) {p.velZ += p.accZ; playSound(world.sounds.jump)}});
+    } else {
+        bindButtonState(options.buttons.up, "down", (_button)=>{if(p.alive && p.controllable) p.velY -= p.accY});
+        bindButtonState(options.buttons.down, "down", (_button)=>{if(p.alive && p.controllable) p.velY += p.accY});
+        bindButtonState(options.buttons.left, "down", (_button)=>{if(p.alive && p.controllable) p.velX -= p.accX});
+        bindButtonState(options.buttons.right, "down", (_button)=>{if(p.alive && p.controllable) p.velX += p.accX});
+        bindButtonState(options.buttons.jump, "firstDown", (_button)=>{if(p.dirZ == 0 && p.alive && p.controllable) {p.velZ += p.accZ; playSound(world.sounds.jump)}});
+    }
 
     if(!p.alive && !p.handledDeath) {
-        for(var j = 0; j < world.sounds.length; j++) {
-            removeSound(j);
+        for(var j in world.sounds) {
+            resetSound(world.sounds[j]);
         }
-        playSound("./sounds/smb_mariodie.wav", ()=>{p.reset()});
+        playSound(world.sounds.die);
         p.handledDeath = true;
+        // p.controllable = true;
     }
 
     for(var i = 0, ent; i < world.entities.length; i++) {
@@ -285,7 +437,7 @@ function gameFrame(delta) {
     options.screenSizeY = world.height;
     options.screenSizeX = world.tilesize * 20;
 
-    var halfScreenWidth = (options.screenSizeX / 2);
+    var halfScreenWidth = (options.screenSizeX * 0.5);
     if(p.x < halfScreenWidth && options.renderOffsetX == 0) options.renderOffsetX = 0;
     else if(p.x + halfScreenWidth > world.width) options.renderOffsetX = world.width - options.screenSizeX;
     else if(p.x - halfScreenWidth > options.renderOffsetX) options.renderOffsetX = p.x - halfScreenWidth;
@@ -311,35 +463,52 @@ function loop(e) {
             world.loaded = true;
             break;
 
-        // load level/init
+        // prepare for gameplay
         case 1:
 
             loadLevel(world.levels[world.levelIndex]);
 
             buffer.canvas.width = world.width;
             buffer.canvas.height = world.height;
-            p = new Player(24, 208, world.tilesize, world.tilesize);
+            p = new Player(world.playerStartX, world.playerStartY, world.tilesize, world.tilesize);
             world.entities.push(p);
 
             resizeCanvas();
 
             world.state = 2;
             world.loaded = false;
-            playSound("./sounds/smb_overworld.wav");
-
+            playSound(world.sounds.loop);
             break;
 
         // standard game stuff
         case 2:
+
+            updateGamepadInputs();
             gameFrame(delta);
             render();
             break;
+
+        // reset level
+        case 3:
+
+            p.delete();
+            p = new Player(world.playerStartX, world.playerStartY, world.tilesize, world.tilesize);
+            world.entities.push(p);
+
+            for(var sound in world.sounds) {
+                resetSound(world.sounds[sound]);
+            }
+            playSound(world.sounds.loop);
+
+            options.renderOffsetX = 0;
+            options.renderOffsetY = 0;
+
+            world.state = 2;
+            break;
     }
 
-
-    var objectKeys = Object.keys(world.keys);
-    for(var key = 0; key < objectKeys.length; key++) {
-        world.keys[objectKeys[key]].firstDown = false;
+    for(var key in world.keys) {
+        world.keys[key].firstDown = false;
     }
 
     old = e;
@@ -361,8 +530,10 @@ function resizeCanvas() {
 
 function handleKeyboardEvents(e) {
     if(e.key && !world.keys[e.key]) world.keys[e.key] = new Key();
+
+    if(options.usingController && (e.type == "keydown" || e.type == "keyup")) return;
+
     var activeKey = world.keys[e.key];
-    //e.preventDefault();
     switch(e.type) {
         case "keydown":
             activeKey.up = false;
@@ -378,13 +549,45 @@ function handleKeyboardEvents(e) {
             activeKey.timestamp = e.timeStamp;
             break;
         case "blur":
-            var objectKeys = Object.keys(world.keys);
-            for(var key = 0; key < objectKeys.length; key++) {
-                world.keys[objectKeys[key]].up = true;
-                world.keys[objectKeys[key]].down = false;
-                world.keys[objectKeys[key]].held = false;
+            for(var key in world.keys) {
+                world.keys[key].up = true;
+                world.keys[key].down = false;
+                world.keys[key].held = false;
             }
     }
+}
+
+function handleGamepadEvents(e) {
+    if(e.type == "gamepadconnected") {
+        options.controller = e.gamepad;
+        options.usingController = e.gamepad.index + 1;
+        for(var button in options.controller.buttons) {
+            world.buttons[button] = new Button(options.controller.buttons[button].value);
+        }
+        // requestAnimationFrame(updateGamepadInputs);
+    } else {
+        options.usingController = false;
+    }
+}
+
+function updateGamepadInputs() {
+    navigator.getGamepads = (navigator.webkitGetGamepads) ? navigator.webkitGetGamepads : navigator.getGamepads;
+
+    if(!options.usingController || navigator.getGamepads == undefined) return;
+    options.controller = navigator.getGamepads()[options.usingController - 1];
+
+    for(var button in options.controller.buttons) {
+        var b = options.controller.buttons[button];
+        var mb = world.buttons[button];
+        mb.value = b.value;
+        mb.down = mb.value > mb.minThreshold;
+        mb.firstDown = (mb.up && mb.down);
+        mb.held = (!mb.firstDown && mb.down);
+        mb.up = !mb.down;
+        if(mb.down) mb.timestamp = options.controller.timestamp;
+    }
+
+    world.axes = options.controller.axes;
 }
 
 function toTileID(x, y) {
@@ -398,10 +601,10 @@ function fromTileID(tileID) {
 }
 
 function collide(entity) {
-    var bottom = entity.y + (entity.size / 2),
-        right  = entity.x + (entity.size / 2),
-        top    = entity.y - (entity.size / 2),
-        left   = entity.x - (entity.size / 2);
+    var bottom = entity.bottomSide,
+        right  = entity.rightSide,
+        top    = entity.topSide,
+        left   = entity.leftSide;
 
     var tileID, xy, tilebottom, tileright, tiletop, tileleft, platformCollision = false;
 
@@ -422,33 +625,43 @@ function collide(entity) {
 
         switch(world.tiles[tileID] - 1) {
             case 0:
-                if(!platformCollision && entity.size <= entity.minSize) p.alive = false;
                 break;
             case 1:
             case 2:
             case 3:
             case 4:
-            case 5:
                 platformCollision = true;
-                p.alive = true;
+                break;
+            case 5:
+                if(entity.dirZ == 0 && (i == 1 || i == 2)) {
+                    platformCollision = true;
+                    entity.flagPole = true;
+                    entity.controllable = false;
+                    entity.leftSide = tileleft + (world.tilesize * 0.25);
+                    entity.facing = -1;
+                    entity.dirX = 0;
+                    entity.dirY = 0;
+                }
                 break;
         }
     }
+    if(!platformCollision && entity.dirZ == 0 && !entity.noclip) entity.alive = false;
 }
 
-function removeSound(index) {
-    world.sounds[index].pause();
-    world.sounds.splice(index, 1);
+function playSound(soundObj, cb = false) {
+    if(cb) soundObj.cb = cb;
+    soundObj.restart();
 }
 
-function playSound(url, cb = false) {
-    var sound = document.createElement("audio"), index;
-    sound.src = url;
-    world.sounds.push(sound);
-    index = world.sounds.length - 1;
-    sound.play();
-    if(cb) sound.addEventListener("ended", cb);
-    sound.addEventListener("ended", ()=>{removeSound(index)});
+function pauseSound(soundObj) {
+    if(soundObj.playing) soundObj.pause();
+}
+
+function restartSound(soundObj) {
+    soundObj.restart();
+}
+function resetSound(soundObj) {
+    soundObj.reset();
 }
 
 function startGame() {
@@ -467,6 +680,8 @@ function hideMenusSwitchState(state) {
 }
 
 function stopGame() {
+    world.state = 0;
+    menuIndex = 0;
 
     cancelAnimationFrame(afr);
 }
@@ -477,3 +692,5 @@ addEventListener("resize", resizeCanvas);
 addEventListener("keydown", handleKeyboardEvents);
 addEventListener("keyup", handleKeyboardEvents);
 addEventListener("blur", handleKeyboardEvents);
+addEventListener("gamepadconnected", handleGamepadEvents);
+addEventListener("gamepaddisconnected", handleGamepadEvents);
