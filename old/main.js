@@ -51,24 +51,29 @@ class Sound {
 
 class Entity {
     constructor(x, y, size, minsize = 16) {
-        this.accX = 1.5; this.accY = 1.5; this.accZ = 4;
+        this.accX = 1; this.accY = 1; this.accZ = 2.5;
         this.velX = 0; this.velY = 0; this.velZ = 0;
         this.dirX = 0; this.dirY = 0; this.dirZ = 0;
-        this.facing = 1;
         this.oldX = x; this.oldY = y;
-        this.x = x;
-        this.y = y;
+        this.x = x; this.y = y;
         this.size = size;
         this.minSize = minsize;
+        this.facing = 1;
         this.alive = true;
         this.noclip = false;
         this.handledDeath = false;
         this.controllable = false;
+        this.lastCollidedWith = false;
+        this.type = "";
         this.state = ""; this.oldState = "";
-        this.activeFrame = document.createElement("img"); this.activeFrame.classList += "fitContent ";
+        this.activeFrame = new Image();
         this.frameIndex = 0;
         this.frameCounter = 0;
         this.frames = {};
+    }
+
+    dynamicCollision(entity) {
+        // console.log(entity);
     }
 
     frame() {
@@ -111,6 +116,20 @@ class Entity {
         this.y = val - (this.size / 2);
     }
 
+    static overlaps(entity, otherEntity) {
+        return !(entity.x - entity.size > otherEntity.x + otherEntity.size ||
+                 entity.x + entity.size < otherEntity.x - otherEntity.size ||
+                 entity.y - entity.size > otherEntity.y + otherEntity.size ||
+                 entity.y + entity.size < otherEntity.y - otherEntity.size);
+    }
+
+    alignToTile() {
+        var coords = fromTileID(toTileID(this.x, this.y));
+        this.leftSide = coords[0];
+        this.topSide = coords[1];
+    }
+
+
     delete() {
         for(var val in this) {
             if(val != "delete") delete this[val];
@@ -119,10 +138,38 @@ class Entity {
     }
 }
 
+class DynamicTile extends Entity {
+    constructor(x, y) {
+        super(x, y, world.tilesize, world.tilesize);
+        this.staticX = x;
+        this.staticY = y;
+    }
+}
+
+class QuestionBlock extends DynamicTile {
+    constructor(x, y, item) {
+        super(x, y);
+        this.item = item;
+        this.opened = false;
+        this.type = "qb";
+        this.state = "inactive"; this.oldState = "inactive";
+        this.frames = {
+            inactive: [new Frame(world.tileset, 384, 0, world.tilesize, world.tilesize)],
+            activated: [new Frame(world.tileset, 432, 0, world.tilesize, world.tilesize)],
+        };
+    }
+
+    frame() {
+
+    }
+}
+
 class Player extends Entity {
-    constructor(x, y, size, minsize = 16) {
-        super(x, y, size, minsize);
-        this.state = "standingRight"; this.oldState = "standingRight"
+    constructor(x, y, minsize = 16) {
+        super(x, y, minsize, minsize);
+        this.accX = 0.9; this.accY = 0.9; this.accZ = 4;
+        this.type = "player";
+        this.state = "standingRight"; this.oldState = "standingRight";
         this.flagPole = false;
         this.won = false;
         this.controllable = true;
@@ -230,6 +277,10 @@ class Player extends Entity {
         }
     }
 
+    // dynamicCollision(ent) {
+    //     console.log(ent);
+    // }
+
     reset() {
         this.alive = true;
         this.handledDeath = false;
@@ -277,6 +328,7 @@ var world = {
     levelIndex: 0,
     levels: [],
     background: document.createElement("img"),
+    qt: {},
     state: 0,
     score: 0,
     friction: 0.75,
@@ -300,6 +352,7 @@ var options = {
         left:  "a",
         down:  "s",
         right: "d",
+        slam:  "f",
     },
     buttons: {
         jump:    0,
@@ -307,6 +360,7 @@ var options = {
         left:   14,
         down:   13,
         right:  15,
+        slam:    1,
     },
     controller: {},
     renderOffsetX: 0,
@@ -378,12 +432,10 @@ function render() {
     ctx.drawImage(buffer.canvas, options.renderOffsetX, options.renderOffsetY, options.screenSizeX, options.screenSizeY, 0, 0, ctx.canvas.width, ctx.canvas.height);
 }
 
-function bindKeyState(key, event, cb) {
-    if(world.keys[key] && world.keys[key][event]) cb(world.keys[key]);
-}
-
-function bindButtonState(button, event, cb) {
-    if(world.buttons[button] && world.buttons[button][event]) cb(options.buttons[button]);
+function bindState(state, event, cb) {
+    var conts = (!options.usingController) ? "keys" : "buttons";
+    var toCheck = options[conts][state];
+    if(world[conts][toCheck] && world[conts][toCheck][event]) cb(world[conts][toCheck]);
 }
 
 function loadLevel(level) {
@@ -406,19 +458,13 @@ function grabLevelsFromFile(filePath) {
 }
 
 function gameFrame(delta) {
-    if(!options.usingController) {
-        bindKeyState(options.keys.up, "down", (_key)=>{if(p.alive && p.controllable) p.velY -= p.accY});
-        bindKeyState(options.keys.down, "down", (_key)=>{if(p.alive && p.controllable) p.velY += p.accY});
-        bindKeyState(options.keys.left, "down", (_key)=>{if(p.alive && p.controllable) p.velX -= p.accX});
-        bindKeyState(options.keys.right, "down", (_key)=>{if(p.alive && p.controllable) p.velX += p.accX});
-        bindKeyState(options.keys.jump, "firstDown", (_key)=>{if(p.dirZ == 0 && p.alive && p.controllable) {p.velZ += p.accZ; playSound(world.sounds.jump)}});
-    } else {
-        bindButtonState(options.buttons.up, "down", (_button)=>{if(p.alive && p.controllable) p.velY -= p.accY});
-        bindButtonState(options.buttons.down, "down", (_button)=>{if(p.alive && p.controllable) p.velY += p.accY});
-        bindButtonState(options.buttons.left, "down", (_button)=>{if(p.alive && p.controllable) p.velX -= p.accX});
-        bindButtonState(options.buttons.right, "down", (_button)=>{if(p.alive && p.controllable) p.velX += p.accX});
-        bindButtonState(options.buttons.jump, "firstDown", (_button)=>{if(p.dirZ == 0 && p.alive && p.controllable) {p.velZ += p.accZ; playSound(world.sounds.jump)}});
-    }
+
+    bindState("up", "down", (_key)=>{if(p.alive && p.controllable) p.velY -= p.accY});
+    bindState("down", "down", (_key)=>{if(p.alive && p.controllable) p.velY += p.accY});
+    bindState("left", "down", (_key)=>{if(p.alive && p.controllable) p.velX -= p.accX});
+    bindState("right", "down", (_key)=>{if(p.alive && p.controllable) p.velX += p.accX});
+    bindState("jump", "firstDown", (_key)=>{if(p.dirZ == 0 && p.alive && p.controllable) {p.velZ += p.accZ; playSound(world.sounds.jump)}});
+    bindState("slam", "down", (_key)=>{if(p.alive && p.controllable && p.dirZ == -1) console.log("powermove")});
 
     if(!p.alive && !p.handledDeath) {
         for(var j in world.sounds) {
@@ -429,9 +475,23 @@ function gameFrame(delta) {
         // p.controllable = true;
     }
 
-    for(var i = 0, ent; i < world.entities.length; i++) {
-        ent = world.entities[i];
+    world.qt = new Quadtree(0, 0, world.width, world.height, 4);
+    var ent, biggest = 0;
+    for(ent of world.entities) {
         ent.frame(delta);
+        ent.lastCollidedWith = false;
+
+        world.qt.insert(new Vec2(ent.leftSide, ent.topSide, ent));
+        world.qt.insert(new Vec2(ent.rightSide, ent.topSide, ent));
+        world.qt.insert(new Vec2(ent.leftSide, ent.bottomSide, ent));
+        world.qt.insert(new Vec2(ent.rightSide, ent.bottomSide, ent));
+
+        if(ent.size > biggest) biggest = ent.size;
+    }
+
+    for(ent of world.entities) {
+        dynamicCollide(ent);
+        staticCollide(ent);
     }
 
     options.screenSizeY = world.height;
@@ -441,7 +501,6 @@ function gameFrame(delta) {
     if(p.x < halfScreenWidth && options.renderOffsetX == 0) options.renderOffsetX = 0;
     else if(p.x + halfScreenWidth > world.width) options.renderOffsetX = world.width - options.screenSizeX;
     else if(p.x - halfScreenWidth > options.renderOffsetX) options.renderOffsetX = p.x - halfScreenWidth;
-    collide(p);
 }
 
 function loop(e) {
@@ -470,7 +529,7 @@ function loop(e) {
 
             buffer.canvas.width = world.width;
             buffer.canvas.height = world.height;
-            p = new Player(world.playerStartX, world.playerStartY, world.tilesize, world.tilesize);
+            p = new Player(world.playerStartX, world.playerStartY);
             world.entities.push(p);
 
             resizeCanvas();
@@ -492,7 +551,7 @@ function loop(e) {
         case 3:
 
             p.delete();
-            p = new Player(world.playerStartX, world.playerStartY, world.tilesize, world.tilesize);
+            p = new Player(world.playerStartX, world.playerStartY);
             world.entities.push(p);
 
             for(var sound in world.sounds) {
@@ -600,7 +659,19 @@ function fromTileID(tileID) {
     return [(x * world.tilesize) + world.offsetX, (y * world.tilesize) + world.offsetY];
 }
 
-function collide(entity) {
+function dynamicCollide(entity) {
+    var intersects = world.qt.extract(entity.leftSide, entity.topSide, entity.size, entity.size);
+    if(intersects.length == 0) return;
+    for(var other of intersects) {
+        if(other.data != entity && other.data.lastCollidedWith != entity) {
+            other.data.dynamicCollision(entity);
+            other.data.lastCollidedWith = entity;
+            // entity.lastCollidedWith = other.data;
+        }
+    }
+}
+
+function staticCollide(entity) {
     var bottom = entity.bottomSide,
         right  = entity.rightSide,
         top    = entity.topSide,
@@ -645,7 +716,11 @@ function collide(entity) {
                 break;
         }
     }
-    if(!platformCollision && entity.dirZ == 0 && !entity.noclip) entity.alive = false;
+    if(!platformCollision && entity.dirZ == 0 && !entity.noclip) {
+        entity.alive = false;
+        entity.velX = 0;
+        entity.velY = 0;
+    }
 }
 
 function playSound(soundObj, cb = false) {
