@@ -77,3 +77,6 @@ export function line(s, e, width = 10, color = "white") {
     buf.stroke();
     buf.restore();
 }
+export function constrain(value, lower, upper) {
+    return Math.max(lower, Math.min(value, upper));
+}
