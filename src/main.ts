@@ -1,9 +1,9 @@
 import { display, engine, mouse, tools, gamepadManager, WORLD } from "globals.js";
 import Player from "player.js";
 
-// engine.fps = 30;
-display.updateBufSize(16*20, 16*14);
+engine.fps = 60;
 
+display.updateBufSize(16*20, 16*14);
 display.buf.imageSmoothingEnabled = false;
 display.ctx.imageSmoothingEnabled = false;
 
@@ -23,5 +23,3 @@ function loop(ms: number) {
 display.setDrawLoop(draw);
 engine.setGameLoop(loop);
 engine.start();
-
-console.log(engine)

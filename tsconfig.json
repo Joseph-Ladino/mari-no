@@ -4,7 +4,7 @@
         "target": "es6",
         "outDir": "./build",
 
-        // "forceConsistentCasingInFileNames": true,
+        "forceConsistentCasingInFileNames": true,
         "baseUrl": "./src",
         "paths": {
             "@engine/*": ["./engine/src/*"]

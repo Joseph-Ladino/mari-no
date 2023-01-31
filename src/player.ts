@@ -59,8 +59,6 @@ export default class Player extends Entity {
 		this.animator.add("flagPoleLeft", new FrameSet(sprite, [new Frame(216, 34, 16, 16, 3, true)]));
 
         this.animator.set("standingRight");
-
-        window.animator = this.animator;
 	}
 
 	draw(alpha: number): void {

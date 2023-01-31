@@ -40,6 +40,8 @@ export default class Display {
     }
     resize() {
         let ar = this.width / this.height;
+        let bufSmoothing = this.buf.imageSmoothingEnabled;
+        let ctxSmoothing = this.ctx.imageSmoothingEnabled;
         if (window.innerWidth / window.innerHeight > ar) {
             this.can.width = window.innerHeight * ar;
             this.can.height = window.innerHeight;
@@ -48,6 +50,9 @@ export default class Display {
             this.can.width = window.innerWidth;
             this.can.height = window.innerWidth / ar;
         }
+        console.log(this);
+        this.ctx.imageSmoothingEnabled = ctxSmoothing;
+        this.buf.imageSmoothingEnabled = bufSmoothing;
         this.updateRatios();
     }
 }
