@@ -56,8 +56,10 @@ export class Animator {
 	}
 
 	set(name: string) {
+		if (name == this.frameSetIndex) return;
 		if (!(name in this.frameSets)) throw new Error(`frame set "${name}" does not exist`);
-		this.frameTimer = 0;
+
+        this.frameTimer = 0;
 		if (this.frameSetIndex in this.frameSets) this.activeFrameSet.index = 0;
 		this.frameSetIndex = name;
 	}

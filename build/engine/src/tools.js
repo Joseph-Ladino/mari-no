@@ -77,9 +77,9 @@ export function line(s, e, width = 10, color = "white") {
     buf.stroke();
     buf.restore();
 }
-export function clamp(v, lower, upper) {
+export function constrain(v, lower, upper) {
     return Math.max(lower, Math.min(v, upper));
 }
-export function clampv(v, lower, upper) {
-    return new Vec(clamp(v.x, lower.x, upper.x), clamp(v.y, lower.y, upper.y));
+export function constrainv(v, lower, upper) {
+    return new Vec(constrain(v.x, lower.x, upper.x), constrain(v.y, lower.y, upper.y));
 }

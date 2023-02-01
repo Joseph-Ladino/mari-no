@@ -50,7 +50,6 @@ export default class Display {
             this.can.width = window.innerWidth;
             this.can.height = window.innerWidth / ar;
         }
-        console.log(this);
         this.ctx.imageSmoothingEnabled = ctxSmoothing;
         this.buf.imageSmoothingEnabled = bufSmoothing;
         this.updateRatios();

@@ -14,6 +14,14 @@ var PlayerInput;
     PlayerInput["JUMP"] = "jump";
     PlayerInput["SHOOT"] = "shoot";
 })(PlayerInput || (PlayerInput = {}));
+var AnimationState;
+(function (AnimationState) {
+    AnimationState[AnimationState["STANDING"] = 0] = "STANDING";
+    AnimationState[AnimationState["WALKING"] = 1] = "WALKING";
+    AnimationState[AnimationState["JUMPING"] = 2] = "JUMPING";
+    AnimationState[AnimationState["DEAD"] = 3] = "DEAD";
+    AnimationState[AnimationState["FLAGPOLE"] = 4] = "FLAGPOLE";
+})(AnimationState || (AnimationState = {}));
 function getInput(p) {
     return keyboard.key(WORLD.keyboardSettings[p]);
 }
@@ -25,7 +33,15 @@ export default class Player extends Entity {
         super();
         this.maxVelX = 16;
         this.maxVelY = 16;
+        this.sizeVel = new Vec();
+        this.minSize = new Vec(16, 16);
         this.roundThresh = 0.5;
+        this.animState = AnimationState.STANDING;
+        this.direction = {
+            x: 1,
+            y: 1,
+            z: 0
+        };
         this.width = this.height = 16;
         this.pos.set(this.size.mlts(0.5));
         let sprite = new ImageAsset("mario", "../sprites/mario strip.png");
@@ -51,6 +67,7 @@ export default class Player extends Entity {
     update(ms) {
         let speedX = 0.9;
         let speedY = 0.9;
+        let speedZ = new Vec(4, 4);
         if (isInputDown(PlayerInput.LEFT))
             this.acc.x -= speedX;
         if (isInputDown(PlayerInput.RIGHT))
@@ -59,19 +76,36 @@ export default class Player extends Entity {
             this.acc.y -= speedY;
         if (isInputDown(PlayerInput.DOWN))
             this.acc.y += speedY;
+        if (getInput(PlayerInput.JUMP).down && this.direction.z == 0) {
+            this.sizeVel.set(this.sizeVel.add(speedZ));
+        }
         this.saveState();
+        this.sizeVel.set(this.sizeVel.subs(WORLD.gravity));
+        let nextSize = this.size.add(this.sizeVel);
+        if (nextSize.x < this.minSize.x) {
+            nextSize.x = this.size.x = this.minSize.x;
+            this.sizeVel.x = 0;
+        }
+        if (nextSize.y < this.minSize.y) {
+            nextSize.y = this.size.y = this.minSize.y;
+            this.sizeVel.y = 0;
+        }
         if (this.vel.magSq < Math.pow(this.roundThresh, 2))
             this.vel = new Vec();
-        if (this.vel.x > 0 && this.animator.frameSetIndex != "walkingRight")
-            this.animator.set("walkingRight");
-        else if (this.vel.x < 0 && this.animator.frameSetIndex != "walkingLeft")
-            this.animator.set("walkingLeft");
-        if (this.vel.x == 0 && this.vel.y == 0 && this.lastFrameState.vel.x > 0)
-            this.animator.set("standingRight");
-        else if (this.vel.x == 0 && this.vel.y == 0 && this.lastFrameState.vel.x < 0)
-            this.animator.set("standingLeft");
+        if (this.vel.x != 0)
+            this.direction.x = Math.sign(this.vel.x); // will never be zero
+        if (this.vel.y != 0)
+            this.direction.y = Math.sign(this.vel.y); // will never be zero
+        this.direction.z = Math.sign(this.sizeVel.x + this.sizeVel.y);
+        // console.log(this.direction);
+        let frameDir = this.direction.x > 0 ? "Right" : "Left";
+        if (!(this.vel.x == 0 && this.vel.y == 0))
+            this.animator.set("walking" + frameDir);
+        else
+            this.animator.set("standing" + frameDir);
         this.vel.x = constrain(this.vel.x, -this.maxVelX, this.maxVelX);
         this.vel.y = constrain(this.vel.y, -this.maxVelY, this.maxVelY);
+        this.size.set(nextSize);
         this.vel.set(this.vel.add(this.acc));
         this.vel.set(this.vel.mlts(WORLD.friction));
         this.pos.set(this.pos.add(this.vel));
