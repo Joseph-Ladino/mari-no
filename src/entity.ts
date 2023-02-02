@@ -37,6 +37,9 @@ export default class Entity {
 	// fixed length of engine update loop in milliseconds
 	update(ms: number) {}
 
+    // call once to initialize
+    init(): void {};
+
 	saveState() {
 		this.lastFrameState.pos = this.pos.clone;
 		this.lastFrameState.vel = this.vel.clone;

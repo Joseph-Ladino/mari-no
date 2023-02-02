@@ -5,6 +5,7 @@ import { keyboard } from "./globals.js";
 import { constrain } from "./engine/src/tools.js";
 import { Frame, FrameSet, Animator } from "./animation.js";
 import { ImageAsset } from "./engine/src/mediaasset.js";
+var game;
 var PlayerInput;
 (function (PlayerInput) {
     PlayerInput["UP"] = "up";
@@ -23,7 +24,7 @@ var AnimationState;
     AnimationState[AnimationState["FLAGPOLE"] = 4] = "FLAGPOLE";
 })(AnimationState || (AnimationState = {}));
 function getInput(p) {
-    return keyboard.key(WORLD.keyboardSettings[p]);
+    return keyboard.key(game.keyboardSettings[p]);
 }
 function isInputDown(p) {
     return getInput(p).down;
@@ -44,20 +45,8 @@ export default class Player extends Entity {
         };
         this.width = this.height = 16;
         this.pos.set(this.size.mlts(0.5));
-        let sprite = new ImageAsset("mario", "../sprites/mario strip.png");
-        sprite.load();
+        this.lastFrameState.pos.set(this.pos);
         this.animator = new Animator();
-        this.animator.add("standingRight", new FrameSet(sprite, [new Frame(80, 34, 16, 16, 3, false)]));
-        this.animator.add("standingLeft", new FrameSet(sprite, [new Frame(80, 34, 16, 16, 3, true)]));
-        this.animator.add("jumpingRight", new FrameSet(sprite, [new Frame(165, 34, 16, 16, 3, false)]));
-        this.animator.add("jumpingLeft", new FrameSet(sprite, [new Frame(165, 34, 16, 16, 3, true)]));
-        this.animator.add("walkingRight", new FrameSet(sprite, [new Frame(97, 34, 16, 16, 3, false), new Frame(114, 34, 16, 16, 3, false), new Frame(131, 34, 16, 16, 3, false)]));
-        this.animator.add("walkingLeft", new FrameSet(sprite, [new Frame(97, 34, 16, 16, 3, true), new Frame(114, 34, 16, 16, 3, true), new Frame(131, 34, 16, 16, 3, true)]));
-        this.animator.add("deadRight", new FrameSet(sprite, [new Frame(182, 34, 16, 16, 3, false)]));
-        this.animator.add("deadLeft", new FrameSet(sprite, [new Frame(182, 34, 16, 16, 3, false)]));
-        this.animator.add("flagPoleRight", new FrameSet(sprite, [new Frame(216, 34, 16, 16, 3, false)]));
-        this.animator.add("flagPoleLeft", new FrameSet(sprite, [new Frame(216, 34, 16, 16, 3, true)]));
-        this.animator.set("standingRight");
     }
     draw(alpha) {
         let interpPos = tools.lerpv(this.lastFrameState.pos, this.pos, alpha).sub(this.size.mlts(0.5));
@@ -67,7 +56,7 @@ export default class Player extends Entity {
     update(ms) {
         let speedX = 0.9;
         let speedY = 0.9;
-        let speedZ = new Vec(4, 4);
+        let speedZ = new Vec(3.5, 3.5);
         if (isInputDown(PlayerInput.LEFT))
             this.acc.x -= speedX;
         if (isInputDown(PlayerInput.RIGHT))
@@ -80,7 +69,7 @@ export default class Player extends Entity {
             this.sizeVel.set(this.sizeVel.add(speedZ));
         }
         this.saveState();
-        this.sizeVel.set(this.sizeVel.subs(WORLD.gravity));
+        this.sizeVel.set(this.sizeVel.subs(game.gravity));
         let nextSize = this.size.add(this.sizeVel);
         if (nextSize.x < this.minSize.x) {
             nextSize.x = this.size.x = this.minSize.x;
@@ -99,7 +88,9 @@ export default class Player extends Entity {
         this.direction.z = Math.sign(this.sizeVel.x + this.sizeVel.y);
         // console.log(this.direction);
         let frameDir = this.direction.x > 0 ? "Right" : "Left";
-        if (!(this.vel.x == 0 && this.vel.y == 0))
+        if (this.direction.z != 0)
+            this.animator.set("jumping" + frameDir);
+        else if (!(this.vel.x == 0 && this.vel.y == 0))
             this.animator.set("walking" + frameDir);
         else
             this.animator.set("standing" + frameDir);
@@ -107,9 +98,26 @@ export default class Player extends Entity {
         this.vel.y = constrain(this.vel.y, -this.maxVelY, this.maxVelY);
         this.size.set(nextSize);
         this.vel.set(this.vel.add(this.acc));
-        this.vel.set(this.vel.mlts(WORLD.friction));
+        this.vel.set(this.vel.mlts(game.friction));
         this.pos.set(this.pos.add(this.vel));
         this.acc.set(new Vec());
         this.animator.update();
+    }
+    init() {
+        game = WORLD.game;
+        console.log(game);
+        let sprite = new ImageAsset("mario", "../sprites/mario strip.png");
+        sprite.load();
+        this.animator.add("standingRight", new FrameSet(sprite, [new Frame(80, 34, 16, 16, 3, false)]));
+        this.animator.add("standingLeft", new FrameSet(sprite, [new Frame(80, 34, 16, 16, 3, true)]));
+        this.animator.add("jumpingRight", new FrameSet(sprite, [new Frame(165, 34, 16, 16, 3, false)]));
+        this.animator.add("jumpingLeft", new FrameSet(sprite, [new Frame(165, 34, 16, 16, 3, true)]));
+        this.animator.add("walkingRight", new FrameSet(sprite, [new Frame(97, 34, 16, 16, 3, false), new Frame(114, 34, 16, 16, 3, false), new Frame(131, 34, 16, 16, 3, false)]));
+        this.animator.add("walkingLeft", new FrameSet(sprite, [new Frame(97, 34, 16, 16, 3, true), new Frame(114, 34, 16, 16, 3, true), new Frame(131, 34, 16, 16, 3, true)]));
+        this.animator.add("deadRight", new FrameSet(sprite, [new Frame(182, 34, 16, 16, 3, false)]));
+        this.animator.add("deadLeft", new FrameSet(sprite, [new Frame(182, 34, 16, 16, 3, false)]));
+        this.animator.add("flagPoleRight", new FrameSet(sprite, [new Frame(216, 34, 16, 16, 3, false)]));
+        this.animator.add("flagPoleLeft", new FrameSet(sprite, [new Frame(216, 34, 16, 16, 3, true)]));
+        this.animator.set("standingRight");
     }
 }

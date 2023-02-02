@@ -1,11 +1,3 @@
 export * from "./engine/src/globals.js";
-import { defaultController, defaultKeyboard } from "./iControlSettings.js";
-const WORLD = {
-    friction: 0.75,
-    gravity: 0.4,
-    drawDebug: false,
-    controllerSettings: defaultController,
-    keyboardSettings: defaultKeyboard
-};
+export const WORLD = {};
 Object.assign(window, WORLD);
-export { WORLD };

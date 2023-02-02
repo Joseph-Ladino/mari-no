@@ -1,4 +1,4 @@
-export default interface iControlSettings {
+export default interface controlSettings {
 	up: string;
 	down: string;
 	left: string;
@@ -7,7 +7,7 @@ export default interface iControlSettings {
 	shoot: string;
 }
 
-const defaultKeyboard: iControlSettings = {
+const defaultKeyboard: controlSettings = {
 	up: "w",
 	down: "s",
 	left: "a",
@@ -16,7 +16,7 @@ const defaultKeyboard: iControlSettings = {
 	shoot: "l",
 };
 
-const defaultController: iControlSettings = {
+const defaultController: controlSettings = {
 	up: "dpadUp",
 	down: "dpadDown",
 	left: "dpadLeft",
@@ -25,4 +25,4 @@ const defaultController: iControlSettings = {
 	shoot: "rTrigger",
 };
 
-export {iControlSettings, defaultKeyboard, defaultController};
+export {controlSettings, defaultKeyboard, defaultController};

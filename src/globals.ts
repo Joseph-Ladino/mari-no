@@ -1,14 +1,7 @@
-export * from "@engine/globals.js"
-import { defaultController, defaultKeyboard } from "iControlSettings.js";
+export * from "@engine/globals.js";
+import Game from "game.js";
+import Player from "player.js";
 
-const WORLD = {
-	friction: 0.75,
-    gravity: 0.4,
-	drawDebug: false,
-    controllerSettings: defaultController,
-    keyboardSettings: defaultKeyboard
-};
+export const WORLD: { game?: Game; player?: Player } = {};
 
 Object.assign(window, WORLD);
-
-export { WORLD };
